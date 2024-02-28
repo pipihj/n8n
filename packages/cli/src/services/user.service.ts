@@ -9,9 +9,11 @@ import type { PostHogClient } from '@/posthog';
 import { Logger } from '@/Logger';
 import { UserManagementMailer } from '@/UserManagement/email';
 import { InternalHooks } from '@/InternalHooks';
+import { JwtService } from '@/services/jwt.service';
 import { UrlService } from '@/services/url.service';
 import type { UserRequest } from '@/requests';
 import { InternalServerError } from '@/errors/response-errors/internal-server.error';
+import { BadRequestError } from '@/errors/response-errors/bad-request.error';
 
 @Service()
 export class UserService {
@@ -20,6 +22,7 @@ export class UserService {
 		private readonly userRepository: UserRepository,
 		private readonly mailer: UserManagementMailer,
 		private readonly urlService: UrlService,
+		private readonly jwtService: JwtService,
 	) {}
 
 	async update(userId: string, data: Partial<User>) {
@@ -61,7 +64,7 @@ export class UserService {
 		}
 
 		if (options?.withInviteUrl && options?.inviterId && publicUser.isPending) {
-			publicUser = this.addInviteUrl(options.inviterId, publicUser);
+			publicUser.inviteAcceptUrl = this.generateInvitationUrl(options.inviterId, user.id);
 		}
 
 		if (options?.posthog) {
@@ -75,15 +78,23 @@ export class UserService {
 		return publicUser;
 	}
 
-	private addInviteUrl(inviterId: string, invitee: PublicUser) {
-		const url = new URL(this.urlService.getInstanceBaseUrl());
-		url.pathname = '/signup';
-		url.searchParams.set('inviterId', inviterId);
-		url.searchParams.set('inviteeId', invitee.id);
+	private generateInvitationUrl(inviterId: string, inviteeId: string) {
+		const baseUrl = this.urlService.getInstanceBaseUrl();
+		const url = new URL(`${baseUrl}/signup`);
+		const token = this.jwtService.sign({ inviterId, inviteeId }, { expiresIn: '7d' });
+		url.searchParams.append('token', token);
+		return url.toString();
+	}
 
-		invitee.inviteAcceptUrl = url.toString();
-
-		return invitee;
+	async validateInvitationToken(token: string) {
+		const { inviterId, inviteeId } = this.jwtService.verify<{
+			inviterId: string;
+			inviteeId: string;
+		}>(token);
+		const users = await this.userRepository.findManyByIds([inviterId, inviteeId]);
+		const invitee = users.find((user) => user.id === inviteeId);
+		const inviter = users.find((user) => user.id === inviterId);
+		return { invitee, inviter };
 	}
 
 	private async addFeatureFlags(publicUser: PublicUser, posthog: PostHogClient) {
@@ -104,7 +115,7 @@ export class UserService {
 	}
 
 	private async sendEmails(
-		owner: User,
+		inviter: User,
 		toInviteUsers: { [key: string]: string },
 		role: AssignableRole,
 	) {
@@ -112,7 +123,7 @@ export class UserService {
 
 		return await Promise.all(
 			Object.entries(toInviteUsers).map(async ([email, id]) => {
-				const inviteAcceptUrl = `${domain}/signup?inviterId=${owner.id}&inviteeId=${id}`;
+				const inviteAcceptUrl = this.generateInvitationUrl(inviter.id, id);
 				const invitedUser: UserRequest.InviteResponse = {
 					user: {
 						id,
@@ -140,7 +151,7 @@ export class UserService {
 					}
 
 					void Container.get(InternalHooks).onUserInvite({
-						user: owner,
+						user: inviter,
 						target_user_id: Object.values(toInviteUsers),
 						public_api: false,
 						email_sent: result.emailSent,
@@ -149,14 +160,13 @@ export class UserService {
 				} catch (e) {
 					if (e instanceof Error) {
 						void Container.get(InternalHooks).onEmailFailed({
-							user: owner,
+							user: inviter,
 							message_type: 'New user invite',
 							public_api: false,
 						});
 						this.logger.error('Failed to send email', {
-							userId: owner.id,
+							userId: inviter.id,
 							inviteAcceptUrl,
-							domain,
 							email,
 						});
 						invitedUser.error = e.message;
@@ -168,7 +178,7 @@ export class UserService {
 		);
 	}
 
-	async inviteUsers(owner: User, attributes: Array<{ email: string; role: AssignableRole }>) {
+	async inviteUsers(inviter: User, attributes: Array<{ email: string; role: AssignableRole }>) {
 		const emails = attributes.map(({ email }) => email);
 
 		const existingUsers = await this.userRepository.findManyByEmail(emails);
@@ -208,7 +218,7 @@ export class UserService {
 		pendingUsersToInvite.forEach(({ email, id }) => createdUsers.set(email, id));
 
 		const usersInvited = await this.sendEmails(
-			owner,
+			inviter,
 			Object.fromEntries(createdUsers),
 			attributes[0].role, // same role for all invited users
 		);
