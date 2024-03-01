@@ -1,8 +1,8 @@
 import { Service } from 'typedi';
 import config from '@/config';
-import type { INodeType, N8nAIProviderType } from 'n8n-workflow';
+import type { INodeType, N8nAIProviderType, NodeError } from 'n8n-workflow';
 import { AIProviderOpenAI } from '@/services/ai/openai';
-import { ApplicationError, NodeError } from 'n8n-workflow';
+import { ApplicationError } from 'n8n-workflow';
 
 function isN8nAIProviderType(value: string): value is N8nAIProviderType {
 	return ['openai'].includes(value);
@@ -12,7 +12,7 @@ function isN8nAIProviderType(value: string): value is N8nAIProviderType {
 export class AIService {
 	private provider: N8nAIProviderType;
 
-	private model: AIProviderOpenAI;
+	public model: AIProviderOpenAI;
 
 	constructor() {
 		const providerName = config.getEnv('ai.provider');
