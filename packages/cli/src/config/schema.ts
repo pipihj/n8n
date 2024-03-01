@@ -1338,6 +1338,12 @@ export const schema = {
 			default: false,
 			env: 'N8N_AI_ENABLED',
 		},
+		provider: {
+			doc: 'AI provider to use. Currently only "openai" is supported.',
+			format: String,
+			default: 'openai',
+			env: 'N8N_AI_PROVIDER',
+		},
 		openAIApiKey: {
 			doc: 'Enable AI features using OpenAI API key',
 			format: String,

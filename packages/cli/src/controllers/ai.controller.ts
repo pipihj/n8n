@@ -1,23 +1,27 @@
 import { Authorized, Post, RestController } from '@/decorators';
 import { AIRequest } from '@/requests';
 import { AIService } from '@/services/ai.service';
+import { NodeTypes } from '@/NodeTypes';
 
 @Authorized()
 @RestController('/ai')
 export class AIController {
-	constructor(private readonly aiService: AIService) {}
+	constructor(
+		private readonly aiService: AIService,
+		private readonly nodeTypes: NodeTypes,
+	) {}
 
 	/**
-	 * Update the logged-in user's settings.
+	 * Suggest a solution for a given error using the AI provider.
 	 */
 	@Post('/debug-error')
-	async debugError(req: AIRequest.DebugError): Promise<string> {
-		const payload = req.body;
-		// const { id } = req.user;
+	async debugError(req: AIRequest.DebugError): Promise<{ message: string }> {
+		const { error } = req.body;
+		const nodeType = this.nodeTypes.getByNameAndVersion(error.node.type, error.node.typeVersion);
 
-		const result = await this.aiService.debugError(payload.error);
-		console.log(payload, result);
-
-		return 'Example';
+		const message = await this.aiService.debugError(error, nodeType);
+		return {
+			message,
+		};
 	}
 }

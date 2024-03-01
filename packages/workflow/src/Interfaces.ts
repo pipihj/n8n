@@ -2453,6 +2453,12 @@ export interface IPublicApiSettings {
 
 export type ExpressionEvaluatorType = 'tmpl' | 'tournament';
 
+export type N8nAIProviderType = 'openai';
+
+export interface N8nAIProvider {
+	prompt(message: string): Promise<string>;
+}
+
 export interface IN8nUISettings {
 	endpointForm: string;
 	endpointFormTest: string;
@@ -2559,6 +2565,7 @@ export interface IN8nUISettings {
 	};
 	ai: {
 		enabled: boolean;
+		provider: string;
 		errorDebugging: boolean;
 	};
 	workflowHistory: {

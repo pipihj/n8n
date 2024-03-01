@@ -36,11 +36,11 @@ export async function generateCodeForPrompt(
 export const debugError = async (
 	context: IRestApiContext,
 	payload: DebugErrorPayload,
-): Promise<{ data: string }> => {
+): Promise<{ message: string }> => {
 	return await makeRestApiRequest(
 		context,
 		'POST',
-		`/ai/debug-error`,
+		'/ai/debug-error',
 		payload as unknown as IDataObject,
 	);
 };

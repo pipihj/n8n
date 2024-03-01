@@ -12,7 +12,7 @@ export const useAIStore = defineStore('ai', () => {
 	const isErrorDebuggingEnabled = computed(() => settingsStore.settings.ai.errorDebugging);
 
 	async function debugError(payload: DebugErrorPayload) {
-		await aiApi.debugError(rootStore.getRestApiContext, payload);
+		return await aiApi.debugError(rootStore.getRestApiContext, payload);
 	}
 
 	return { isErrorDebuggingEnabled, debugError };
