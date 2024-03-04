@@ -38,8 +38,8 @@
 <script lang="ts">
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { defineComponent, type PropType } from 'vue';
+import type { Placement } from 'element-plus';
 import N8nTooltip from '../N8nTooltip';
-import { Placement } from 'element-plus';
 
 export default defineComponent({
 	name: 'N8nNodeIcon',
