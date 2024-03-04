@@ -628,6 +628,17 @@ function copySuccess() {
 			margin-top: var(--spacing-2xs);
 			margin-bottom: var(--spacing-2xs);
 		}
+
+		pre {
+			padding: var(--spacing-s);
+			width: 100%;
+			overflow: auto;
+			background: var(--color-background-light);
+
+			code {
+				font-size: var(--font-size-s);
+			}
+		}
 	}
 
 	&__feedback-toolbar {

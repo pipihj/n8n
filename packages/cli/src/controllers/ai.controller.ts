@@ -17,7 +17,11 @@ export class AIController {
 	@Post('/debug-error')
 	async debugError(req: AIRequest.DebugError): Promise<{ message: string }> {
 		const { error } = req.body;
-		const nodeType = this.nodeTypes.getByNameAndVersion(error.node.type, error.node.typeVersion);
+
+		let nodeType;
+		if (error.node?.type) {
+			nodeType = this.nodeTypes.getByNameAndVersion(error.node.type, error.node.typeVersion);
+		}
 
 		const message = await this.aiService.debugError(error, nodeType);
 		return {

@@ -3,6 +3,7 @@ import config from '@/config';
 import type { INodeType, N8nAIProviderType, NodeError } from 'n8n-workflow';
 import { AIProviderOpenAI } from '@/services/ai/openai';
 import { ApplicationError } from 'n8n-workflow';
+import { createDebugErrorPrompt } from '@/services/ai/prompts/debugError';
 
 function isN8nAIProviderType(value: string): value is N8nAIProviderType {
 	return ['openai'].includes(value);
@@ -31,19 +32,7 @@ export class AIService {
 		return await this.model.prompt(message);
 	}
 
-	async debugError(error: NodeError, nodeType: INodeType) {
-		console.log(error, nodeType);
-		return await this.prompt(
-			`I'm using n8n (https://n8n.io) to integrate with ${
-				nodeType.description.name
-			} and encountered an error That I don't know how to solve.
-
-Here's the complete error structure:
-\`\`\`
-${JSON.stringify(error, null, 2)}
-\`\`\`
-
-Could you provide a structured solution with step-by-step instructions to resolve this issue? Assume intermediate knowledge of n8n and Notion.`,
-		);
+	async debugError(error: NodeError, nodeType?: INodeType) {
+		return await this.prompt(createDebugErrorPrompt(error, nodeType));
 	}
 }
