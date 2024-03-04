@@ -10,28 +10,40 @@ export const createDebugErrorPrompt = (
 
 Use any knowledge you have about n8n ${
 	nodeType ? ` and ${nodeType.description.displayName}` : ''
-} to suggest a solution. Check node parameters, credentials, syntax validity, and the data being processed. Include code examples and expressions where applicable. You have access to the error object${
+} to suggest a solution:
+- Check node parameters
+- Check credentials
+- Check syntax validity
+- Check the data being processed
+- Include code examples and expressions where applicable
+- Suggest reading and include links to the documentation ${
+	nodeType?.description.documentationUrl
+		? `for the ${nodeType.description.displayName} Node (${nodeType?.description.documentationUrl})`
+		: '(https://docs.n8n.io)'
+}
+- Suggest reaching out and include links to the support forum (https://community.n8n.io) for help
+
+You have access to the error object${
 	nodeType
 		? ` and a simplified array of nodeType properties for the ${nodeType.description.displayName} Node`
 		: ''
 }.
-Also suggest reaching out to the support forum (https://community.n8n.io) for help if necessary.
 
-Here's the complete error structure:
+This is the complete error structure:
 \`\`\`
 ${JSON.stringify(error, null, 2)}
 \`\`\`
 
 ${
 	nodeType
-		? `Here's the simplified nodeType properties structure:
+		? `This is the simplified nodeType properties structure:
 \`\`\`
 ${JSON.stringify(summarizeNodeTypeProperties(nodeType.description.properties), null, 2)}
 \`\`\``
 		: ''
 }
 
-Please provide a structured solution with step-by-step instructions to resolve this issue. Assume the following about the user you're helping:
+Please provide a well structured solution with step-by-step instructions to resolve this issue. Assume the following about the user you're helping:
 - The user is viewing the problematic ${
 	nodeType ? `${nodeType.description.displayName} ` : ''
 }Node already
