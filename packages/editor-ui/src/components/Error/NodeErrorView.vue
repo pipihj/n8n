@@ -18,12 +18,14 @@ import type { IDataObject } from 'n8n-workflow';
 import { useAIStore } from '@/stores/ai.store';
 import { useI18n } from '@/composables/useI18n';
 import VueMarkdown from 'vue-markdown-render';
+import { useTelemetry } from '@/composables/useTelemetry';
 
 const props = defineProps(['error']);
 
 const clipboard = useClipboard();
 const i18n = useI18n();
 const toast = useToast();
+const telemetry = useTelemetry();
 
 const nodeTypesStore = useNodeTypesStore();
 const ndvStore = useNDVStore();
@@ -116,12 +118,18 @@ async function onDebugErrorRegenerate() {
 
 	await onDebugError();
 
-	// send telemetry
+	telemetry.track('User regenerated error debugging AI hint', {
+		node_type: props.error.node?.type,
+		error_title: props.error.message,
+	});
 }
 
 async function onErrorDebuggingFeedback(feedback: 'positive' | 'negative') {
-	console.log('Feedback:', feedback);
-	// send telemetry
+	telemetry.track('User responded error debugging AI hint', {
+		helpful: feedback === 'positive',
+		node_type: props.error.node?.type,
+		error_title: props.error.message,
+	});
 }
 
 function nodeVersionTag(nodeType: IDataObject): string {
