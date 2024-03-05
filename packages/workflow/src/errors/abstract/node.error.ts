@@ -126,6 +126,15 @@ export abstract class NodeError extends ExecutionBaseError {
 	}
 
 	/**
+	 * Preserve the original error message before setting the new one
+	 */
+	protected addToMessages(message: string): void {
+		if (message && !this.messages.includes(message)) {
+			this.messages.push(message);
+		}
+	}
+
+	/**
 	 * Set descriptive error message if code is provided or if message contains any of the common errors,
 	 * update description to include original message plus the description
 	 */

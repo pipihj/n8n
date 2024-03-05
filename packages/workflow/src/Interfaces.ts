@@ -2479,6 +2479,7 @@ export interface IN8nUISettings {
 	urlBaseWebhook: string;
 	urlBaseEditor: string;
 	versionCli: string;
+	binaryDataMode: string;
 	releaseChannel: 'stable' | 'beta' | 'nightly' | 'dev';
 	n8nMetadata?: {
 		userId?: string;
@@ -2592,6 +2593,6 @@ export type BannerName =
 	| 'NON_PRODUCTION_LICENSE'
 	| 'EMAIL_CONFIRMATION';
 
-export type Functionality = 'regular' | 'configuration-node';
+export type Functionality = 'regular' | 'configuration-node' | 'pairedItem';
 
 export type Result<T, E> = { ok: true; result: T } | { ok: false; error: E };

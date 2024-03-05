@@ -102,7 +102,9 @@ const STATUS_CODE_MESSAGES: IStatusCodeMessages = {
 	'504': 'Gateway timed out - perhaps try again later?',
 };
 
-const UNKNOWN_ERROR_MESSAGE = 'UNKNOWN ERROR - check the detailed error for more information';
+const UNKNOWN_ERROR_MESSAGE = 'There was an unknown issue while executing the node';
+const UNKNOWN_ERROR_DESCRIPTION =
+	'Double-check the node configuration and the service it connects to. Check the error details below and refer to the <a href="https://docs.n8n.io" target="_blank">n8n documentation</a> to troubleshoot the issue. ';
 const UNKNOWN_ERROR_MESSAGE_CRED = 'UNKNOWN ERROR';
 
 /**
@@ -128,6 +130,8 @@ export class NodeApiError extends NodeError {
 		}: NodeApiErrorOptions = {},
 	) {
 		super(node, errorResponse);
+
+		this.addToMessages(errorResponse.message as string);
 
 		if (!httpCode && errorResponse instanceof AxiosError) {
 			httpCode = errorResponse.response?.status?.toString();
@@ -188,6 +192,25 @@ export class NodeApiError extends NodeError {
 			this.level = 'warning';
 		}
 
+		if (
+			errorResponse?.response &&
+			typeof errorResponse?.response === 'object' &&
+			!Array.isArray(errorResponse.response) &&
+			errorResponse.response.data &&
+			typeof errorResponse.response.data === 'object' &&
+			!Array.isArray(errorResponse.response.data)
+		) {
+			const data = errorResponse.response.data;
+
+			if (data.message) {
+				description = data.message as string;
+			} else if (data.error && ((data.error as IDataObject) || {}).message) {
+				description = (data.error as IDataObject).message as string;
+			}
+
+			this.context.data = data;
+		}
+
 		// set description of this error
 		if (description) {
 			this.description = description;
@@ -197,15 +220,17 @@ export class NodeApiError extends NodeError {
 			if (parseXml) {
 				this.setDescriptionFromXml(errorResponse.error as string);
 			} else {
-				// this.description = this.findProperty(
-				// 	errorResponse,
-				// 	ERROR_MESSAGE_PROPERTIES,
-				// 	ERROR_NESTING_PROPERTIES,
-				// );
+				this.description = this.findProperty(
+					errorResponse,
+					ERROR_MESSAGE_PROPERTIES,
+					ERROR_NESTING_PROPERTIES,
+				);
 			}
 		}
 
-		// set message if provided or set default message based on http code
+		// set message if provided
+		// set default message based on http code
+		// or use raw error message
 		if (message) {
 			this.message = message;
 		} else {
@@ -260,29 +285,44 @@ export class NodeApiError extends NodeError {
 
 		if (!this.httpCode) {
 			this.httpCode = null;
-			// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-			this.message = this.message || UNKNOWN_ERROR_MESSAGE;
+
+			if (!this.message) {
+				if (this.description) {
+					this.message = this.description;
+					this.description = undefined;
+				} else {
+					this.message = UNKNOWN_ERROR_MESSAGE;
+					this.description = UNKNOWN_ERROR_DESCRIPTION;
+				}
+			}
 			return;
 		}
 
 		if (STATUS_CODE_MESSAGES[this.httpCode]) {
-			this.messages.push(this.message);
+			this.addToMessages(this.message);
 			this.message = STATUS_CODE_MESSAGES[this.httpCode];
 			return;
 		}
 
 		switch (this.httpCode.charAt(0)) {
 			case '4':
-				this.messages.push(this.message);
+				this.addToMessages(this.message);
 				this.message = STATUS_CODE_MESSAGES['4XX'];
 				break;
 			case '5':
-				this.messages.push(this.message);
+				this.addToMessages(this.message);
 				this.message = STATUS_CODE_MESSAGES['5XX'];
 				break;
 			default:
-				// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-				this.message = this.message || UNKNOWN_ERROR_MESSAGE;
+				if (!this.message) {
+					if (this.description) {
+						this.message = this.description;
+						this.description = undefined;
+					} else {
+						this.message = UNKNOWN_ERROR_MESSAGE;
+						this.description = UNKNOWN_ERROR_DESCRIPTION;
+					}
+				}
 		}
 		if (this.node.type === 'n8n-nodes-base.noOp' && this.message === UNKNOWN_ERROR_MESSAGE) {
 			this.message = `${UNKNOWN_ERROR_MESSAGE_CRED} - ${this.httpCode}`;

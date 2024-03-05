@@ -288,6 +288,10 @@ function copyErrorDetails() {
 		errorDetails.request = error.context.request;
 	}
 
+	if (error.extra) {
+		errorDetails.errorExtra = error.extra;
+	}
+
 	errorInfo.errorDetails = errorDetails;
 
 	const n8nDetails: IDataObject = {};
@@ -353,236 +357,229 @@ function copySuccess() {
 
 <template>
 	<div class="node-error-view">
-		<div v-if="!getErrorMessage()">
-			<div class="node-error-view__header">
-				<div class="node-error-view__header-message">
-					There was an unknown issue while executing the node
+		<div class="node-error-view__header">
+			<div class="node-error-view__header-message">
+				<div :class="showErrorDebuggingButton ? 'mt-4xs' : ''">
+					{{ getErrorMessage() }}
 				</div>
-				<div class="node-error-view__header-description">
-					Double-check the node configuration and the service it connects to. Check the error
-					details below and refer to the
-					<a href="https://docs.n8n.io">n8n documentation</a> to troubleshoot the issue.
-				</div>
+				<N8nButton v-if="showErrorDebuggingButton" type="tertiary" @click="onDebugError">
+					{{ i18n.baseText('nodeErrorView.debugError.button') }}
+				</N8nButton>
 			</div>
+			<div
+				class="node-error-view__header-description"
+				v-if="error.description"
+				v-html="getErrorDescription()"
+			></div>
 		</div>
-		<div v-else>
-			<div class="node-error-view__header">
-				<div class="node-error-view__header-message">
-					<div :class="showErrorDebuggingButton ? 'mt-4xs' : ''">
-						{{ getErrorMessage() }}
+
+		<N8nCard
+			v-if="isLoadingErrorDebugging || errorDebuggingMessage"
+			class="node-error-view__debugging mb-s"
+		>
+			<span v-if="isLoadingErrorDebugging">
+				<N8nSpinner class="mr-3xs" />
+				{{ i18n.baseText('nodeErrorView.debugError.loading') }}
+			</span>
+			<VueMarkdown v-else :source="errorDebuggingMessage" />
+
+			<div v-if="errorDebuggingMessage" class="node-error-view__feedback-toolbar">
+				<Feedback v-model="errorDebuggingFeedback" @update:model-value="onErrorDebuggingFeedback" />
+				<N8nTooltip :content="i18n.baseText('nodeErrorView.debugError.feedback.reload')">
+					<span class="node-error-view__feedback-button" @click="onDebugErrorRegenerate">
+						<FontAwesomeIcon icon="sync-alt" />
+					</span>
+				</N8nTooltip>
+			</div>
+		</N8nCard>
+
+		<div class="node-error-view__info">
+			<div class="node-error-view__info-header">
+				<p class="node-error-view__info-title">
+					{{ i18n.baseText('nodeErrorView.details.title') }}
+				</p>
+				<n8n-tooltip
+					class="item"
+					:content="i18n.baseText('nodeErrorView.copyToClipboard.tooltip')"
+					placement="left"
+				>
+					<div class="copy-button">
+						<n8n-icon-button
+							icon="copy"
+							type="secondary"
+							size="mini"
+							text="true"
+							transparent-background="transparent"
+							@click="copyErrorDetails"
+						/>
 					</div>
-					<N8nButton v-if="showErrorDebuggingButton" type="tertiary" @click="onDebugError">
-						{{ i18n.baseText('nodeErrorView.debugError.button') }}
-					</N8nButton>
-				</div>
-				<div
-					class="node-error-view__header-description"
-					v-if="error.description"
-					v-html="getErrorDescription()"
-				></div>
+				</n8n-tooltip>
 			</div>
 
-			<N8nCard
-				v-if="isLoadingErrorDebugging || errorDebuggingMessage"
-				class="node-error-view__debugging mb-s"
-			>
-				<span v-if="isLoadingErrorDebugging">
-					<N8nSpinner class="mr-3xs" />
-					{{ i18n.baseText('nodeErrorView.debugError.loading') }}
-				</span>
-				<VueMarkdown v-else :source="errorDebuggingMessage" />
-
-				<div v-if="errorDebuggingMessage" class="node-error-view__feedback-toolbar">
-					<Feedback
-						v-model="errorDebuggingFeedback"
-						@update:model-value="onErrorDebuggingFeedback"
-					/>
-					<N8nTooltip :content="i18n.baseText('nodeErrorView.debugError.feedback.reload')">
-						<span class="node-error-view__feedback-button" @click="onDebugErrorRegenerate">
-							<FontAwesomeIcon icon="sync-alt" />
-						</span>
-					</N8nTooltip>
-				</div>
-			</N8nCard>
-
-			<div class="node-error-view__info">
-				<div class="node-error-view__info-header">
-					<p class="node-error-view__info-title">
-						{{ i18n.baseText('nodeErrorView.details.title') }}
-					</p>
-					<n8n-tooltip
-						class="item"
-						:content="i18n.baseText('nodeErrorView.copyToClipboard.tooltip')"
-						placement="left"
-					>
-						<div class="copy-button">
-							<n8n-icon-button
-								icon="copy"
-								type="secondary"
-								size="mini"
-								text="true"
-								transparent-background="transparent"
-								@click="copyErrorDetails"
-							/>
+			<div class="node-error-view__info-content">
+				<details
+					class="node-error-view__details"
+					v-if="error.httpCode || uniqueMessages.length || error?.context?.data || error.extra"
+				>
+					<summary class="node-error-view__details-summary">
+						<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
+						From {{ error?.node?.name || 'Node' }}
+					</summary>
+					<div class="node-error-view__details-content">
+						<div class="node-error-view__details-row" v-if="error.httpCode">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.errorCode') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ error.httpCode }}</code>
+							</p>
 						</div>
-					</n8n-tooltip>
-				</div>
-
-				<div class="node-error-view__info-content">
-					<details class="node-error-view__details" v-if="error.httpCode || uniqueMessages.length">
-						<summary class="node-error-view__details-summary">
-							<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
-							From {{ error?.node?.name || 'Node' }}
-						</summary>
-						<div class="node-error-view__details-content">
-							<div class="node-error-view__details-row" v-if="error.httpCode">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.errorCode') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ error.httpCode }}</code>
-								</p>
-							</div>
-							<div class="node-error-view__details-row" v-if="uniqueMessages.length">
-								<p class="node-error-view__details-label">Full message</p>
-								<div
-									class="node-error-view__details-value"
-									v-for="(msg, index) in uniqueMessages"
-									:key="index"
-								>
+						<div class="node-error-view__details-row" v-if="uniqueMessages.length">
+							<p class="node-error-view__details-label">Full message</p>
+							<div class="node-error-view__details-value">
+								<div v-for="(msg, index) in uniqueMessages" :key="index">
 									<pre><code>{{ msg }}</code></pre>
 								</div>
 							</div>
-							<div
-								class="node-error-view__details-row"
-								v-if="error.context && error.context.request"
-							>
-								<p class="node-error-view__details-label">Request</p>
-								<div class="node-error-view__details-value">
-									<pre><code>{{ error.context.request }}</code></pre>
-								</div>
+						</div>
+						<div class="node-error-view__details-row" v-if="error?.context?.data">
+							<p class="node-error-view__details-label">Error data</p>
+							<div class="node-error-view__details-value">
+								<pre><code>{{ error.context.data }}</code></pre>
 							</div>
-							<!-- <div class="node-error-view__details-row">
+						</div>
+						<div class="node-error-view__details-row" v-if="error.extra">
+							<p class="node-error-view__details-label">Error extra</p>
+							<div class="node-error-view__details-value">
+								<pre><code>{{ error.extra }}</code></pre>
+							</div>
+						</div>
+						<div class="node-error-view__details-row" v-if="error.context && error.context.request">
+							<p class="node-error-view__details-label">Request</p>
+							<div class="node-error-view__details-value">
+								<pre><code>{{ error.context.request }}</code></pre>
+							</div>
+						</div>
+						<!-- <div class="node-error-view__details-row">
 								<p class="node-error-view__details-label">Response</p>
 								<p class="node-error-view__details-value">
 									<code>...</code>
 								</p>
 							</div> -->
+					</div>
+				</details>
+
+				<details class="node-error-view__details">
+					<summary class="node-error-view__details-summary">
+						<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
+						{{ i18n.baseText('nodeErrorView.details.info') }}
+					</summary>
+					<div class="node-error-view__details-content">
+						<div
+							class="node-error-view__details-row"
+							v-if="error.context && error.context.itemIndex !== undefined"
+						>
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.itemIndex') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ error.context.itemIndex }}</code>
+							</p>
 						</div>
-					</details>
 
-					<details class="node-error-view__details">
-						<summary class="node-error-view__details-summary">
-							<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
-							{{ i18n.baseText('nodeErrorView.details.info') }}
-						</summary>
-						<div class="node-error-view__details-content">
-							<div
-								class="node-error-view__details-row"
-								v-if="error.context && error.context.itemIndex !== undefined"
-							>
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.itemIndex') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ error.context.itemIndex }}</code>
-								</p>
-							</div>
-
-							<div
-								class="node-error-view__details-row"
-								v-if="error.context && error.context.runIndex !== undefined"
-							>
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.runIndex') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ error.context.runIndex }}</code>
-								</p>
-							</div>
-
-							<div
-								class="node-error-view__details-row"
-								v-if="error.context && error.context.parameter !== undefined"
-							>
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.inParameter') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ parameterDisplayName(error.context.parameter) }}</code>
-								</p>
-							</div>
-
-							<div class="node-error-view__details-row" v-if="error.node && error.node.typeVersion">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.nodeVersion') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>
-										<span>{{ error.node.typeVersion + ' ' }}</span>
-										<span>({{ nodeVersionTag(error.node) }})</span>
-									</code>
-								</p>
-							</div>
-
-							<div class="node-error-view__details-row" v-if="error.node && error.node.type">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.nodeType') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ error.node.type }}</code>
-								</p>
-							</div>
-
-							<div class="node-error-view__details-row">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.n8nVersion') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ n8nVersion }}</code>
-								</p>
-							</div>
-
-							<div class="node-error-view__details-row" v-if="error.timestamp">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.time') }}
-								</p>
-								<p class="node-error-view__details-value">
-									<code>{{ new Date(error.timestamp).toLocaleString() }}</code>
-								</p>
-							</div>
-
-							<div class="node-error-view__details-row" v-if="error.cause && displayCause">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.errorCause') }}
-								</p>
-
-								<pre class="node-error-view__details-value"><code>{{ error.cause }}</code></pre>
-							</div>
-
-							<div
-								class="node-error-view__details-row"
-								v-if="error.context && error.context.causeDetailed"
-							>
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.causeDetailed') }}
-								</p>
-
-								<pre
-									class="node-error-view__details-value"
-								><code>{{ error.context.causeDetailed }}</code></pre>
-							</div>
-
-							<div class="node-error-view__details-row" v-if="error.stack">
-								<p class="node-error-view__details-label">
-									{{ i18n.baseText('nodeErrorView.details.stackTrace') }}
-								</p>
-
-								<pre class="node-error-view__details-value"><code>{{ error.stack }}</code></pre>
-							</div>
+						<div
+							class="node-error-view__details-row"
+							v-if="error.context && error.context.runIndex !== undefined"
+						>
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.runIndex') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ error.context.runIndex }}</code>
+							</p>
 						</div>
-					</details>
-				</div>
+
+						<div
+							class="node-error-view__details-row"
+							v-if="error.context && error.context.parameter !== undefined"
+						>
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.inParameter') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ parameterDisplayName(error.context.parameter) }}</code>
+							</p>
+						</div>
+
+						<div class="node-error-view__details-row" v-if="error.node && error.node.type">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.nodeType') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ error.node.type }}</code>
+							</p>
+						</div>
+
+						<div class="node-error-view__details-row" v-if="error.node && error.node.typeVersion">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.nodeVersion') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>
+									<span>{{ error.node.typeVersion + ' ' }}</span>
+									<span>({{ nodeVersionTag(error.node) }})</span>
+								</code>
+							</p>
+						</div>
+
+						<div class="node-error-view__details-row">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.n8nVersion') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ n8nVersion }}</code>
+							</p>
+						</div>
+
+						<div class="node-error-view__details-row" v-if="error.timestamp">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.time') }}
+							</p>
+							<p class="node-error-view__details-value">
+								<code>{{ new Date(error.timestamp).toLocaleString() }}</code>
+							</p>
+						</div>
+
+						<div class="node-error-view__details-row" v-if="error.cause && displayCause">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.errorCause') }}
+							</p>
+
+							<pre class="node-error-view__details-value"><code>{{ error.cause }}</code></pre>
+						</div>
+
+						<div
+							class="node-error-view__details-row"
+							v-if="error.context && error.context.causeDetailed"
+						>
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.causeDetailed') }}
+							</p>
+
+							<pre
+								class="node-error-view__details-value"
+							><code>{{ error.context.causeDetailed }}</code></pre>
+						</div>
+
+						<div class="node-error-view__details-row" v-if="error.stack">
+							<p class="node-error-view__details-label">
+								{{ i18n.baseText('nodeErrorView.details.stackTrace') }}
+							</p>
+
+							<pre class="node-error-view__details-value"><code>{{ error.stack }}</code></pre>
+						</div>
+					</div>
+				</details>
 			</div>
 		</div>
 	</div>
@@ -593,7 +590,7 @@ function copySuccess() {
 	&__header {
 		max-width: 960px;
 		margin: 0 auto var(--spacing-s) auto;
-		padding-bottom: var(--spacing-4xs);
+		padding-bottom: var(--spacing-3xs);
 		background-color: var(--color-background-xlight);
 		border: 1px solid var(--color-foreground-base);
 		border-radius: var(--border-radius-large);
@@ -622,8 +619,8 @@ function copySuccess() {
 	}
 
 	&__header-description {
-		padding: 0 var(--spacing-s) var(--spacing-xs) var(--spacing-s);
-		font-size: var(--font-size-s);
+		padding: 0 var(--spacing-s) var(--spacing-3xs) var(--spacing-s);
+		font-size: var(--font-size-xs);
 	}
 
 	&__debugging {
