@@ -7,6 +7,7 @@ import type {
 	INodePropertyCollection,
 	INodePropertyOptions,
 	NodeOperationError,
+	IDataObject,
 } from 'n8n-workflow';
 import Feedback from '@/components/Feedback.vue';
 import { sanitizeHtml } from '@/utils/htmlUtils';
@@ -14,7 +15,6 @@ import { useNDVStore } from '@/stores/ndv.store';
 import { useNodeTypesStore } from '@/stores/nodeTypes.store';
 import { useRootStore } from '@/stores/n8nRoot.store';
 import { useClipboard } from '@/composables/useClipboard';
-import type { IDataObject } from 'n8n-workflow';
 import { useAIStore } from '@/stores/ai.store';
 import { useI18n } from '@/composables/useI18n';
 import VueMarkdown from 'vue-markdown-render';
