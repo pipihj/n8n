@@ -1,13 +1,16 @@
 <script lang="ts" setup>
+import type { PropType } from 'vue';
 import { computed, ref } from 'vue';
 import { useToast } from '@/composables/useToast';
 import { MAX_DISPLAY_DATA_SIZE } from '@/constants';
 import type {
+	IDataObject,
 	INodeProperties,
 	INodePropertyCollection,
 	INodePropertyOptions,
+	NodeApiError,
+	NodeError,
 	NodeOperationError,
-	IDataObject,
 } from 'n8n-workflow';
 import Feedback from '@/components/Feedback.vue';
 import { sanitizeHtml } from '@/utils/htmlUtils';
@@ -20,7 +23,12 @@ import { useI18n } from '@/composables/useI18n';
 import VueMarkdown from 'vue-markdown-render';
 import { useTelemetry } from '@/composables/useTelemetry';
 
-const props = defineProps(['error']);
+const props = defineProps({
+	error: {
+		type: Object as PropType<NodeError | NodeApiError | NodeOperationError>,
+		required: true,
+	},
+});
 
 const clipboard = useClipboard();
 const i18n = useI18n();
@@ -77,11 +85,11 @@ const n8nVersion = computed(() => {
 
 const uniqueMessages = computed<Array<string | IDataObject>>(() => {
 	const returnData: Array<string | IDataObject> = [];
-	if (!props.error.messages || !props.error.messages.length) {
+	if (!props.error.messages?.length) {
 		return [];
 	}
 	const errorMessage = getErrorMessage();
-	(Array.from(new Set(props.error.messages)) as string[]).forEach((message) => {
+	Array.from(new Set(props.error.messages)).forEach((message) => {
 		const parts = message.split(' - ').map((part) => part.trim());
 		//try to parse the message as JSON
 		for (const part of parts) {
@@ -141,12 +149,12 @@ async function onErrorDebuggingFeedback(feedback: 'positive' | 'negative') {
 	});
 }
 
-function nodeVersionTag(nodeType: IDataObject): string {
-	if (!nodeType || nodeType.hidden) {
+function nodeVersionTag(nodeType: NodeError['node']): string {
+	if (!nodeType || ('hidden' in nodeType && nodeType.hidden)) {
 		return i18n.baseText('nodeSettings.deprecated');
 	}
 
-	const latestNodeVersion = Math.max(...nodeTypesStore.getNodeVersions(nodeType.type as string));
+	const latestNodeVersion = Math.max(...nodeTypesStore.getNodeVersions(nodeType.type));
 
 	if (latestNodeVersion === nodeType.typeVersion) {
 		return i18n.baseText('nodeSettings.latest');
@@ -179,12 +187,12 @@ function getErrorDescription(): string {
 		);
 	}
 	if (!props.error.context?.descriptionTemplate) {
-		return sanitizeHtml(props.error.description);
+		return sanitizeHtml(props.error.description ?? '');
 	}
 
-	const parameterName = parameterDisplayName(props.error.context.parameter);
+	const parameterName = parameterDisplayName(props.error.context.parameter as string);
 	return sanitizeHtml(
-		props.error.context.descriptionTemplate.replace(/%%PARAMETER%%/g, parameterName),
+		(props.error.context.descriptionTemplate as string).replace(/%%PARAMETER%%/g, parameterName),
 	);
 }
 
@@ -196,10 +204,9 @@ function getErrorMessage(): string {
 		(props.error as NodeOperationError).functionality === 'configuration-node';
 
 	if (isSubNodeError) {
-		const baseErrorMessageSubNode = i18n.baseText('nodeErrorView.errorSubNode', {
+		return i18n.baseText('nodeErrorView.errorSubNode', {
 			interpolate: { node: props.error.node.name },
 		});
-		return baseErrorMessageSubNode;
 	}
 
 	if (props.error.message === props.error.description) {
@@ -209,10 +216,10 @@ function getErrorMessage(): string {
 		return baseErrorMessage + props.error.message;
 	}
 
-	const parameterName = parameterDisplayName(props.error.context.parameter);
-
+	const parameterName = parameterDisplayName(props.error.context.parameter as string);
 	return (
-		baseErrorMessage + props.error.context.messageTemplate.replace(/%%PARAMETER%%/g, parameterName)
+		baseErrorMessage +
+		(props.error.context.messageTemplate as string).replace(/%%PARAMETER%%/g, parameterName)
 	);
 }
 
@@ -289,7 +296,7 @@ function copyErrorDetails() {
 		rawErrorMessage: error.messages,
 	};
 
-	if (error.httpCode) {
+	if ('httpCode' in error && error.httpCode) {
 		errorDetails.httpCode = error.httpCode;
 	}
 
@@ -346,7 +353,7 @@ function copyErrorDetails() {
 		n8nDetails.cause = error.cause;
 	}
 
-	n8nDetails.stackTrace = error.stack && error.stack.split('\n');
+	n8nDetails.stackTrace = error.stack?.split('\n');
 
 	errorInfo.n8nDetails = n8nDetails;
 
@@ -376,8 +383,8 @@ function copySuccess() {
 				</N8nButton>
 			</div>
 			<div
-				class="node-error-view__header-description"
 				v-if="error.description"
+				class="node-error-view__header-description"
 				v-html="getErrorDescription()"
 			></div>
 		</div>
@@ -427,15 +434,20 @@ function copySuccess() {
 
 			<div class="node-error-view__info-content">
 				<details
+					v-if="
+						('httpCode' in error && error.httpCode) ||
+						uniqueMessages.length ||
+						error?.context?.data ||
+						error.extra
+					"
 					class="node-error-view__details"
-					v-if="error.httpCode || uniqueMessages.length || error?.context?.data || error.extra"
 				>
 					<summary class="node-error-view__details-summary">
 						<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
 						From {{ nodeDefaultName }}
 					</summary>
 					<div class="node-error-view__details-content">
-						<div class="node-error-view__details-row" v-if="error.httpCode">
+						<div v-if="'httpCode' in error && error.httpCode" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.errorCode') }}
 							</p>
@@ -443,7 +455,7 @@ function copySuccess() {
 								<code>{{ error.httpCode }}</code>
 							</p>
 						</div>
-						<div class="node-error-view__details-row" v-if="uniqueMessages.length">
+						<div v-if="uniqueMessages.length" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">Full message</p>
 							<div class="node-error-view__details-value">
 								<div v-for="(msg, index) in uniqueMessages" :key="index">
@@ -451,19 +463,19 @@ function copySuccess() {
 								</div>
 							</div>
 						</div>
-						<div class="node-error-view__details-row" v-if="error?.context?.data">
+						<div v-if="error?.context?.data" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">Error data</p>
 							<div class="node-error-view__details-value">
 								<pre><code>{{ error.context.data }}</code></pre>
 							</div>
 						</div>
-						<div class="node-error-view__details-row" v-if="error.extra">
+						<div v-if="error.extra" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">Error extra</p>
 							<div class="node-error-view__details-value">
 								<pre><code>{{ error.extra }}</code></pre>
 							</div>
 						</div>
-						<div class="node-error-view__details-row" v-if="error.context && error.context.request">
+						<div v-if="error.context && error.context.request" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">Request</p>
 							<div class="node-error-view__details-value">
 								<pre><code>{{ error.context.request }}</code></pre>
@@ -485,8 +497,8 @@ function copySuccess() {
 					</summary>
 					<div class="node-error-view__details-content">
 						<div
-							class="node-error-view__details-row"
 							v-if="error.context && error.context.itemIndex !== undefined"
+							class="node-error-view__details-row"
 						>
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.itemIndex') }}
@@ -497,8 +509,8 @@ function copySuccess() {
 						</div>
 
 						<div
-							class="node-error-view__details-row"
 							v-if="error.context && error.context.runIndex !== undefined"
+							class="node-error-view__details-row"
 						>
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.runIndex') }}
@@ -509,8 +521,8 @@ function copySuccess() {
 						</div>
 
 						<div
-							class="node-error-view__details-row"
 							v-if="error.context && error.context.parameter !== undefined"
+							class="node-error-view__details-row"
 						>
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.inParameter') }}
@@ -520,7 +532,7 @@ function copySuccess() {
 							</p>
 						</div>
 
-						<div class="node-error-view__details-row" v-if="error.node && error.node.type">
+						<div v-if="error.node && error.node.type" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.details.nodeType') }}
 							</p>
@@ -529,7 +541,7 @@ function copySuccess() {
 							</p>
 						</div>
 
-						<div class="node-error-view__details-row" v-if="error.node && error.node.typeVersion">
+						<div v-if="error.node && error.node.typeVersion" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.details.nodeVersion') }}
 							</p>
@@ -550,7 +562,7 @@ function copySuccess() {
 							</p>
 						</div>
 
-						<div class="node-error-view__details-row" v-if="error.timestamp">
+						<div v-if="error.timestamp" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.time') }}
 							</p>
@@ -559,7 +571,7 @@ function copySuccess() {
 							</p>
 						</div>
 
-						<div class="node-error-view__details-row" v-if="error.cause && displayCause">
+						<div v-if="error.cause && displayCause" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.details.errorCause') }}
 							</p>
@@ -568,8 +580,8 @@ function copySuccess() {
 						</div>
 
 						<div
-							class="node-error-view__details-row"
 							v-if="error.context && error.context.causeDetailed"
+							class="node-error-view__details-row"
 						>
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.details.causeDetailed') }}
@@ -580,7 +592,7 @@ function copySuccess() {
 							><code>{{ error.context.causeDetailed }}</code></pre>
 						</div>
 
-						<div class="node-error-view__details-row" v-if="error.stack">
+						<div v-if="error.stack" class="node-error-view__details-row">
 							<p class="node-error-view__details-label">
 								{{ i18n.baseText('nodeErrorView.details.stackTrace') }}
 							</p>
@@ -758,7 +770,8 @@ function copySuccess() {
 
 		code {
 			color: var(--color-json-string);
-			text-wrap: wrap;
+			text-wrap: normal;
+			white-space: normal;
 			word-wrap: break-word;
 		}
 	}
