@@ -100,6 +100,15 @@ const uniqueMessages = computed<Array<string | IDataObject>>(() => {
 	return returnData;
 });
 
+const nodeDefaultName = computed(() => {
+	if (!props.error.node) {
+		return 'Node';
+	}
+
+	const nodeType = nodeTypesStore.getNodeType(props.error.node.type, props.error.node.typeVersion);
+	return nodeType?.defaults?.name || props.error.node.name;
+});
+
 async function onDebugError() {
 	try {
 		isLoadingErrorDebugging.value = true;
@@ -423,7 +432,7 @@ function copySuccess() {
 				>
 					<summary class="node-error-view__details-summary">
 						<font-awesome-icon class="node-error-view__details-icon" icon="angle-right" />
-						From {{ error?.node?.name || 'Node' }}
+						From {{ nodeDefaultName }}
 					</summary>
 					<div class="node-error-view__details-content">
 						<div class="node-error-view__details-row" v-if="error.httpCode">
