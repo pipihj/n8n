@@ -16,7 +16,6 @@ export class AIProviderOpenAI implements N8nAIProvider {
 	}
 
 	async prompt(prompt: string) {
-		console.log('prompt', prompt);
 		const data = await this.model.chat.completions.create({
 			messages: [{ role: 'user', content: prompt }],
 			model: 'gpt-3.5-turbo',
