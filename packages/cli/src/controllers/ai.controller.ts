@@ -1,9 +1,8 @@
-import { Authorized, Post, RestController } from '@/decorators';
+import { Post, RestController } from '@/decorators';
 import { AIRequest } from '@/requests';
 import { AIService } from '@/services/ai.service';
 import { NodeTypes } from '@/NodeTypes';
 
-@Authorized()
 @RestController('/ai')
 export class AIController {
 	constructor(
