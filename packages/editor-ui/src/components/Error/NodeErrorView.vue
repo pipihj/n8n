@@ -378,7 +378,12 @@ function copySuccess() {
 				<div :class="showErrorDebuggingButton ? 'mt-4xs' : ''">
 					{{ getErrorMessage() }}
 				</div>
-				<N8nButton v-if="showErrorDebuggingButton" type="tertiary" @click="onDebugError">
+				<N8nButton
+					v-if="showErrorDebuggingButton"
+					type="tertiary"
+					size="small"
+					@click="onDebugError"
+				>
 					{{ i18n.baseText('nodeErrorView.debugError.button') }}
 				</N8nButton>
 			</div>
