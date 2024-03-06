@@ -106,7 +106,7 @@ const nodeDefaultName = computed(() => {
 	}
 
 	const nodeType = nodeTypesStore.getNodeType(props.error.node.type, props.error.node.typeVersion);
-	return nodeType?.defaults?.name || props.error.node.name;
+	return nodeType?.defaults?.name ?? props.error.node.name;
 });
 
 async function onDebugError() {
