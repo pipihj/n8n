@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import config from '@/config';
 import type { N8nAIProvider } from 'n8n-workflow';
-import type { ChatCompletion } from 'openai/src/resources/chat/completions';
 
 export class AIProviderOpenAI implements N8nAIProvider {
 	private model: OpenAI;
@@ -12,7 +11,7 @@ export class AIProviderOpenAI implements N8nAIProvider {
 		});
 	}
 
-	mapResponse(data: ChatCompletion): string {
+	mapResponse(data: OpenAI.ChatCompletion): string {
 		return data.choices[0].message.content ?? '';
 	}
 
